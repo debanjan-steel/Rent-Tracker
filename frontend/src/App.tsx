@@ -12,6 +12,7 @@ import {
 import type { DashboardResponse, MonthlyEntry } from "./types";
 import {
   addMonth,
+  deleteEntireHistory,
   deleteMonth,
   fetchDashboard,
   flushOfflineQueue,
@@ -420,6 +421,26 @@ export function App() {
               const restored = await restoreBackupJson(payload);
               setDashboard(restored);
               setRecoverableBackup(null);
+            }}
+            onDeleteEntireHistory={async () => {
+              try {
+                setBusy(true);
+                setError(null);
+                const fresh = await deleteEntireHistory();
+                setDashboard(fresh);
+                setRecoverableBackup(null);
+                setFromCache(false);
+                setPendingSyncCount(0);
+              } catch (err) {
+                setError(
+                  err instanceof Error
+                    ? err.message
+                    : "Failed to delete history. Connect to the internet and try again.",
+                );
+                throw err;
+              } finally {
+                setBusy(false);
+              }
             }}
           />
         )}

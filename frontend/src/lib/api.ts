@@ -2,6 +2,7 @@ import type { DashboardResponse, DashboardSummary, LeasePeriod, MonthlyEntry, Re
 import { makeMutationId, nextMonthKey, todayIso } from "../utils/format";
 import {
   cacheDashboard,
+  clearAllOfflineData,
   enqueueMutation,
   hasRealUserData,
   listQueuedMutations,
@@ -285,6 +286,15 @@ export async function restoreBackupJson(payload: unknown): Promise<DashboardResp
   });
   await cacheDashboard(restored);
   return restored;
+}
+
+export async function deleteEntireHistory(): Promise<DashboardResponse> {
+  const fresh = await requestJson<DashboardResponse>("/history", {
+    method: "DELETE",
+  });
+  await clearAllOfflineData();
+  await cacheDashboard(fresh);
+  return fresh;
 }
 
 export async function executeWithOfflineFallback(

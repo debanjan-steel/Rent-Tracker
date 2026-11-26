@@ -648,3 +648,14 @@ def import_backup_payload(session: Session, raw_payload: dict[str, Any]) -> Dash
 
     session.commit()
     return build_dashboard(session, lease_id=fallback_lease_id)
+
+
+def reset_all_history(session: Session) -> DashboardResponse:
+    """Delete all stored rent, electric, deposit, and settings history and re-seed fresh defaults."""
+    session.execute(delete(MonthlyEntry))
+    session.execute(delete(RentRateHistory))
+    session.execute(delete(LeasePeriod))
+    session.execute(delete(AppSettings))
+    session.commit()
+    ensure_initial_state(session)
+    return build_dashboard(session)

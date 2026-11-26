@@ -38,6 +38,7 @@ from .services import (
     get_month_or_404,
     import_backup_payload,
     reopen_security_deposit,
+    reset_all_history,
     settle_security_deposit,
     toggle_payment_status,
     update_electric_bill,
@@ -292,6 +293,14 @@ def import_json(
 ) -> DashboardResponse:
     """Restore and migrate any supported backup JSON format without deleting data."""
     return import_backup_payload(session, payload)
+
+
+@app.delete("/api/v1/history", response_model=DashboardResponse)
+def delete_entire_history(
+    session: Session = Depends(get_session),
+) -> DashboardResponse:
+    """Permanently delete all stored ledger history and reset to a fresh empty state."""
+    return reset_all_history(session)
 
 
 # Serve production PWA bundle when built

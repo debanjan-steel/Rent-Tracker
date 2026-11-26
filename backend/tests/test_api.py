@@ -382,3 +382,29 @@ def test_sqlite_v1_schema_migrates_non_destructively_with_backup(tmp_path):
     finally:
         migrated_engine.dispose()
 
+
+def test_delete_entire_history_resets_cleanly_to_jan_2026(client: TestClient):
+    """DELETE /api/v1/history removes all history and resets to a fresh Jan-to-current ledger."""
+    dash = client.get("/api/v1/dashboard").json()
+    lease_id = dash["active_lease"]["id"]
+    m1_id = dash["months"][0]["id"]
+
+    client.put("/api/v1/settings/rent", json={"rent_amount_paise": 1_500_000, "note": "Setup"})
+    client.put(
+        f"/api/v1/leases/{lease_id}/deposit",
+        json={"security_deposit_paise": 5_000_000, "deposit_given_date": "2026-01-01"},
+    )
+    client.post(f"/api/v1/months/{m1_id}/rent/toggle")
+    client.patch(f"/api/v1/months/{m1_id}/electric", json={"electric_amount_paise": 100_000})
+
+    reset_resp = client.delete("/api/v1/history")
+    assert reset_resp.status_code == 200
+    reset_data = reset_resp.json()
+
+    assert reset_data["settings"]["default_rent_paise"] == 0
+    assert reset_data["active_lease"]["security_deposit_paise"] == 0
+    assert reset_data["active_lease"]["deposit_status"] == "not_set"
+    assert reset_data["rate_history"] == []
+    assert reset_data["months"][0]["month_key"].endswith("-01")
+    assert all(m["rent_status"] == "due_pending" and m["electric_status"] == "blank" for m in reset_data["months"])
+

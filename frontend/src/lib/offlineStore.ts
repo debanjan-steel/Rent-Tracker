@@ -201,6 +201,22 @@ export async function clearDurableUserBackup(): Promise<void> {
   }
 }
 
+export async function clearAllOfflineData(): Promise<void> {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([STORE_STATE, STORE_QUEUE], "readwrite");
+      tx.objectStore(STORE_STATE).clear();
+      tx.objectStore(STORE_QUEUE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    // Best-effort clear
+  }
+}
+
 export async function enqueueMutation(item: QueuedMutation): Promise<void> {
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {

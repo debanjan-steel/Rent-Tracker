@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, History, Smartphone, Check, Upload, DatabaseZap } from "lucide-react";
+import { Download, History, Smartphone, Check, Upload, DatabaseZap, Trash2 } from "lucide-react";
 import type { DashboardResponse } from "../types";
 import { formatINR, paiseToInput, rupeesInputToPaise } from "../utils/format";
 
@@ -11,6 +11,7 @@ interface SettingsPanelProps {
   onSaveRent: (rentPaise: number, note?: string) => Promise<void>;
   onUpdateLease: (tenantName: string, unitLabel: string, startMonth: string) => Promise<void>;
   onImportBackup: (payload: unknown) => Promise<void>;
+  onDeleteEntireHistory: () => Promise<void>;
 }
 
 export function SettingsPanel({
@@ -21,8 +22,10 @@ export function SettingsPanel({
   onSaveRent,
   onUpdateLease,
   onImportBackup,
+  onDeleteEntireHistory,
 }: SettingsPanelProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
   const { settings, active_lease, rate_history, summary } = dashboard;
   const [rentDraft, setRentDraft] = useState(() => paiseToInput(settings.default_rent_paise));
   const [rentNote, setRentNote] = useState("");
@@ -322,6 +325,59 @@ export function SettingsPanel({
           </ul>
         </div>
       )}
+
+      {/* Danger Zone: Delete Entire History */}
+      <div className="space-y-3 rounded-2xl border border-rose-200 bg-rose-50/40 p-5 shadow-xs">
+        <div className="flex items-center gap-2 text-sm font-bold text-rose-900">
+          <Trash2 className="h-4 w-4 text-rose-600" />
+          <span>Delete Entire History</span>
+        </div>
+        <p className="text-xs text-rose-800/80">
+          Permanently clear all monthly rent records, electric bills, security deposit entries, and rent rate history on the server and in this browser.
+        </p>
+
+        {!confirmReset ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setConfirmReset(true)}
+            className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>Delete Entire History</span>
+          </button>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-rose-200 bg-white p-3">
+            <span className="text-xs font-semibold text-rose-900">
+              Are you sure? This cannot be undone (unless you exported a JSON backup).
+            </span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                void (async () => {
+                  await onDeleteEntireHistory();
+                  setConfirmReset(false);
+                  setSavedNotice("Entire history deleted and reset to a fresh ledger.");
+                  setTimeout(() => setSavedNotice(null), 4000);
+                })();
+              }}
+              className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Confirm Delete Everything</span>
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setConfirmReset(false)}
+              className="inline-flex min-h-9 cursor-pointer items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
