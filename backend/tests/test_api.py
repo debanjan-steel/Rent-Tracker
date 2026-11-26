@@ -202,6 +202,11 @@ def test_idempotent_month_creation_and_duplicate_conflict(client: TestClient):
 
 def test_pwa_static_and_api_404_guard(client: TestClient):
     """Built PWA index, manifest, and service worker are served and /api/* 404s stay JSON."""
+    health_get = client.get("/api/v1/health")
+    assert health_get.status_code == 200
+    health_head = client.head("/api/v1/health")
+    assert health_head.status_code == 200
+
     index_resp = client.get("/")
     assert index_resp.status_code == 200
     assert "Rent &amp; Electric Tracker" in index_resp.text

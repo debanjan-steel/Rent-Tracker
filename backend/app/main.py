@@ -78,8 +78,9 @@ app.add_middleware(
 
 
 @app.get("/api/v1/health")
+@app.head("/api/v1/health", include_in_schema=False)
 def health_check() -> dict[str, str]:
-    """Basic health probe."""
+    """Basic health probe (supports GET and HEAD for uptime monitors)."""
     return {"status": "ok"}
 
 
