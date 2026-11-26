@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: rent-electric-tracker
+    runtime: docker
+    # Note: Render persistent disks require Starter plan or higher; for free ephemeral testing, remove the disk block or use external DB URL.
+    plan: starter
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: RENT_TRACKER_DB_PATH
+        value: /data/rent_tracker.db
+    disk:
+      name: rent-tracker-data
+      mountPath: /data
+      sizeGB: 1

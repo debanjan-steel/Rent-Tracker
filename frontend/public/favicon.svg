@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="28" fill="#0f766e" />
+  <path d="M26 62L64 30l38 32v40a8 8 0 0 1-8 8H34a8 8 0 0 1-8-8V62z" fill="#f0fdfa" />
+  <text x="64" y="88" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="42" font-weight="800" fill="#0f766e">&#8377;</text>
+</svg>
