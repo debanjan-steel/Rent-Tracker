@@ -183,6 +183,9 @@ export function SettingsPanel({
               onChange={(e) => setStartMonth(e.target.value)}
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-600"
             />
+            <p className="text-[11px] text-slate-400">
+              Setting an earlier start month automatically adds any missing months.
+            </p>
           </div>
         </div>
 

@@ -189,7 +189,8 @@ When the user updates **Rent** (in Settings or the top-of-page Rent Rate input) 
 | `2026-11-26` | Finalized Phase 0 decisions: Single-tenant MVP (multi-tenant-ready schema), Option A (FastAPI + React/Vite TypeScript PWA), `INR ₹`, and blank-until-entered Electric Bill flow (`blank` -> manual entry -> `Due / Pending` -> click -> `Paid / Success`). Transitioned Phase 1 to `🔄 Ongoing`. | `✅ Done` |
 | `2026-11-26` | Completed Phases 1–3 implementation: built FastAPI + SQLite backend, pytest integration tests, React + TypeScript + Vite PWA (`vite-plugin-pwa`, IndexedDB offline queue, PNG icons), Columns & Month Tabs UI, Security Deposit hold/return flow, Top-bar/Settings Rent Rate control, and CSV/JSON exports. | `✅ Done` |
 | `2026-11-26` | Hardened PWA Workbox routing & MIME headers, added deposit deduction preview, added `Dockerfile`, `.dockerignore`, `render.yaml`, and `README.md`, and prepared repository for GitHub push & HTTPS PWA deployment. | `✅ Done` |
-| `2026-11-26` | Pushed entire project to `https://github.com/debanjan-steel/Rent-Tracker` (`main`). Ready for HTTPS PWA deployment. | `🔄 Ongoing` |
+| `2026-11-26` | Pushed entire project to `https://github.com/debanjan-steel/Rent-Tracker` (`main`). Ready for HTTPS PWA deployment. | `✅ Done` |
+| `2026-11-26` | Updated initial month seeding to start from `Jan 2026` (`2026-01` through current month), defaulted Month Tabs view to `Jan 2026`, and added automatic month backfilling when setting an earlier Lease Start Month in Settings. | `✅ Done` |
 
 ---
 

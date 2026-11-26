@@ -40,7 +40,7 @@ def client(tmp_path):
 
 
 def test_initial_dashboard_and_blank_electric_bill(client: TestClient):
-    """App initializes in INR with one active lease and a month whose electric bill starts blank."""
+    """App initializes in INR starting from January of current year with blank electric bills."""
     resp = client.get("/api/v1/dashboard")
     assert resp.status_code == 200
     data = resp.json()
@@ -48,7 +48,9 @@ def test_initial_dashboard_and_blank_electric_bill(client: TestClient):
     assert data["settings"]["currency"] == "INR"
     assert data["settings"]["default_rent_paise"] == 0
     assert data["active_lease"]["deposit_status"] == "not_set"
-    assert len(data["months"]) == 1
+    assert data["active_lease"]["start_month"].endswith("-01")
+    assert len(data["months"]) >= 1
+    assert data["months"][0]["month_key"] == data["active_lease"]["start_month"]
 
     first_month = data["months"][0]
     assert first_month["rent_status"] == "due_pending"
@@ -64,42 +66,58 @@ def test_rent_setting_updates_only_due_pending_months(client: TestClient):
     """Changing rent updates all due_pending months while keeping paid_success months unchanged."""
     dash = client.get("/api/v1/dashboard").json()
     lease_id = dash["active_lease"]["id"]
+    initial_count = len(dash["months"])
     m1 = dash["months"][0]
 
-    # Set initial rent to ₹10,000
+    # Set initial rent to ₹10,000 (updates all existing due_pending months)
     r1 = client.put("/api/v1/settings/rent", json={"rent_amount_paise": 1_000_000, "note": "Initial rent"})
     assert r1.status_code == 200
-    assert r1.json()["updated_due_months_count"] == 1
+    assert r1.json()["updated_due_months_count"] == initial_count
 
-    # Add month 2 and month 3 (auto-filled with ₹10,000 and due_pending)
-    m2 = client.post(f"/api/v1/leases/{lease_id}/months", json={}).json()
-    m3 = client.post(f"/api/v1/leases/{lease_id}/months", json={}).json()
-    assert m2["rent_amount_paise"] == 1_000_000
-    assert m3["rent_amount_paise"] == 1_000_000
+    # Add two more future months (auto-filled with ₹10,000 and due_pending)
+    m_extra_1 = client.post(f"/api/v1/leases/{lease_id}/months", json={}).json()
+    m_extra_2 = client.post(f"/api/v1/leases/{lease_id}/months", json={}).json()
+    assert m_extra_1["rent_amount_paise"] == 1_000_000
+    assert m_extra_2["rent_amount_paise"] == 1_000_000
 
-    # Mark month 1 rent as paid_success
-    pay_m1 = client.post(f"/api/v1/months/{m1['id']}/rent/toggle", json={"paid_date": "2026-11-05"})
+    # Mark first month (Jan) rent as paid_success
+    pay_m1 = client.post(f"/api/v1/months/{m1['id']}/rent/toggle", json={"paid_date": "2026-01-05"})
     assert pay_m1.status_code == 200
     assert pay_m1.json()["rent_status"] == "paid_success"
 
     # Increase rent to ₹12,500 in Settings
     r2 = client.put("/api/v1/settings/rent", json={"rent_amount_paise": 1_250_000, "note": "Annual revision"})
     assert r2.status_code == 200
-    assert r2.json()["updated_due_months_count"] == 2
+    assert r2.json()["updated_due_months_count"] == initial_count + 1
 
     updated_dash = client.get("/api/v1/dashboard").json()
     months = updated_dash["months"]
     assert months[0]["rent_amount_paise"] == 1_000_000
     assert months[0]["rent_status"] == "paid_success"
-    assert months[1]["rent_amount_paise"] == 1_250_000
-    assert months[1]["rent_status"] == "due_pending"
-    assert months[2]["rent_amount_paise"] == 1_250_000
-    assert months[2]["rent_status"] == "due_pending"
+    assert all(m["rent_amount_paise"] == 1_250_000 and m["rent_status"] == "due_pending" for m in months[1:])
 
-    # Adding month 4 later picks up the new ₹12,500 rate
-    m4 = client.post(f"/api/v1/leases/{lease_id}/months", json={}).json()
-    assert m4["rent_amount_paise"] == 1_250_000
-    assert m4["rent_status"] == "due_pending"
+    # Adding another month later picks up the new ₹12,500 rate
+    m_later = client.post(f"/api/v1/leases/{lease_id}/months", json={}).json()
+    assert m_later["rent_amount_paise"] == 1_250_000
+    assert m_later["rent_status"] == "due_pending"
+
+
+def test_backfill_earlier_start_month_adds_missing_months(client: TestClient):
+    """Updating lease start_month to an earlier date fills missing months without duplicating existing ones."""
+    dash = client.get("/api/v1/dashboard").json()
+    lease_id = dash["active_lease"]["id"]
+    before_count = len(dash["months"])
+
+    resp = client.put(
+        f"/api/v1/leases/{lease_id}",
+        json={"start_month": "2025-11"},
+    )
+    assert resp.status_code == 200
+
+    after_dash = client.get("/api/v1/dashboard").json()
+    assert after_dash["months"][0]["month_key"] == "2025-11"
+    assert after_dash["months"][1]["month_key"] == "2025-12"
+    assert len(after_dash["months"]) == before_count + 2
 
 
 def test_electric_bill_blank_to_due_to_paid_and_clear(client: TestClient):

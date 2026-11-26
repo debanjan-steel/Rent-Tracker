@@ -25,6 +25,23 @@ def current_month_key() -> str:
     return date.today().strftime("%Y-%m")
 
 
+def default_start_month_key() -> str:
+    """Return January of the current year (e.g. '2026-01')."""
+    return f"{date.today().year:04d}-01"
+
+
+def month_range_keys(start_month: str, end_month: str) -> list[str]:
+    """Return inclusive chronological YYYY-MM keys from start_month to end_month."""
+    if start_month > end_month:
+        return [start_month]
+    keys: list[str] = []
+    cursor = start_month
+    while cursor <= end_month:
+        keys.append(cursor)
+        cursor = next_month_key(cursor)
+    return keys
+
+
 def today_iso() -> str:
     """Return today's YYYY-MM-DD date string."""
     return date.today().isoformat()
@@ -50,34 +67,70 @@ def get_or_create_settings(session: Session) -> AppSettings:
     return settings
 
 
-def ensure_initial_state(session: Session) -> LeasePeriod:
-    """Ensure settings, a primary lease period, and its starting month exist."""
+def backfill_missing_months(session: Session, lease: LeasePeriod, start_month: str, end_month: str) -> int:
+    """Create any missing MonthlyEntry rows between start_month and end_month."""
     settings = get_or_create_settings(session)
+    existing_keys = set(
+        session.scalars(select(MonthlyEntry.month_key).where(MonthlyEntry.lease_id == lease.id))
+    )
+    created = 0
+    for month_key in month_range_keys(start_month, end_month):
+        if month_key in existing_keys:
+            continue
+        session.add(
+            MonthlyEntry(
+                lease_id=lease.id,
+                month_key=month_key,
+                rent_amount_paise=settings.default_rent_paise,
+                rent_status="due_pending",
+                electric_amount_paise=None,
+                electric_status="blank",
+            )
+        )
+        created += 1
+    return created
+
+
+def ensure_initial_state(session: Session) -> LeasePeriod:
+    """Ensure settings, a primary lease period, and Jan-to-current months exist."""
+    get_or_create_settings(session)
     lease = session.scalar(select(LeasePeriod).order_by(LeasePeriod.id.asc()))
+    default_start = default_start_month_key()
+    current_month = current_month_key()
+
     if lease is None:
-        start_month = current_month_key()
         lease = LeasePeriod(
             tenant_name="Primary Tenant",
             unit_label="Rental Unit",
-            start_month=start_month,
+            start_month=default_start,
             status="active",
             security_deposit_paise=0,
             deposit_status="not_set",
         )
         session.add(lease)
         session.flush()
-
-        first_month = MonthlyEntry(
-            lease_id=lease.id,
-            month_key=start_month,
-            rent_amount_paise=settings.default_rent_paise,
-            rent_status="due_pending",
-            electric_amount_paise=None,
-            electric_status="blank",
-        )
-        session.add(first_month)
+        backfill_missing_months(session, lease, default_start, current_month)
         session.commit()
         session.refresh(lease)
+    else:
+        # If an untouched default lease was created starting at current_month, expand back to Jan of this year
+        existing_months = list(
+            session.scalars(select(MonthlyEntry).where(MonthlyEntry.lease_id == lease.id))
+        )
+        if (
+            lease.start_month == current_month
+            and default_start < current_month
+            and lease.deposit_status == "not_set"
+            and len(existing_months) == 1
+            and existing_months[0].month_key == current_month
+            and existing_months[0].rent_amount_paise == 0
+            and existing_months[0].rent_status == "due_pending"
+            and existing_months[0].electric_status == "blank"
+        ):
+            lease.start_month = default_start
+            backfill_missing_months(session, lease, default_start, current_month)
+            session.commit()
+            session.refresh(lease)
     return lease
 
 
@@ -249,10 +302,13 @@ def create_lease_period(session: Session, payload: LeasePeriodCreate) -> LeasePe
 
 def update_lease_period(session: Session, lease: LeasePeriod, payload: LeasePeriodUpdate) -> LeasePeriod:
     """Update tenant name, unit label, dates, or active/ended status."""
+    previous_start = lease.start_month
     for field in ("tenant_name", "unit_label", "start_month", "end_month", "status"):
         value = getattr(payload, field)
         if value is not None:
             setattr(lease, field, value.strip() if isinstance(value, str) else value)
+    if payload.start_month is not None and payload.start_month < previous_start:
+        backfill_missing_months(session, lease, payload.start_month, current_month_key())
     lease.updated_at = utc_now()
     session.commit()
     session.refresh(lease)

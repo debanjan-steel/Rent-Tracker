@@ -29,7 +29,7 @@ export function MonthlyLedgerView({
   onSaveNotes,
 }: MonthlyLedgerViewProps) {
   const [selectedMonthId, setSelectedMonthId] = useState<number | null>(
-    months.length > 0 ? months[months.length - 1].id : null,
+    months.length > 0 ? months[0].id : null,
   );
   const [customMonth, setCustomMonth] = useState("");
   const [showCustomPicker, setShowCustomPicker] = useState(false);
@@ -40,11 +40,11 @@ export function MonthlyLedgerView({
       return;
     }
     if (!months.some((m) => m.id === selectedMonthId)) {
-      setSelectedMonthId(months[months.length - 1].id);
+      setSelectedMonthId(months[0].id);
     }
   }, [months, selectedMonthId]);
 
-  const activeMonth = months.find((m) => m.id === selectedMonthId) ?? months[months.length - 1] ?? null;
+  const activeMonth = months.find((m) => m.id === selectedMonthId) ?? months[0] ?? null;
 
   const [notesDraft, setNotesDraft] = useState(activeMonth?.notes ?? "");
   useEffect(() => {
