@@ -28,12 +28,12 @@
 | ✅ Build Security Deposit card, Month Columns/Tabs & Settings UI | Phase 2 | Implemented `RentRateBanner`, `ElectricCell`, `MonthlyLedgerView`, `SecurityDepositPanel`, `SettingsPanel` |
 | ✅ Add IndexedDB offline queue & JSON/CSV backup export | Phase 3 | Implemented `offlineStore.ts` + offline sync replay + `/api/v1/export/csv` & JSON backup |
 | ✅ Add container & deployment files + live server verification | Phase 4 | Added `Dockerfile`, `.dockerignore`, `render.yaml`, `README.md`; verified live `uvicorn` PWA + API smoke test |
+| ✅ Push project to GitHub (`debanjan-steel/Rent-Tracker`) | Release | Pushed clean `main` branch with Python, React PWA, tests, and Docker configs |
 
 ### Tab 2: 🔄 Ongoing
 | Task | Category | Notes |
 | :--- | :--- | :--- |
-| 🔄 Push entire project to GitHub | Release | Waiting for user's GitHub repository URL |
-| 🔄 Share HTTPS PWA deployment instructions | Release | Step-by-step Render / Railway / Fly.io + phone/desktop install guide |
+| 🔄 Deploy over HTTPS & install PWA on devices | Release | Follow deployment instructions (Fly.io / Railway / Render) to get an `https://` URL |
 
 ### Tab 3: 🗓️ Future
 | Task | Category | Notes |
@@ -173,7 +173,8 @@ When the user updates **Rent** (in Settings or the top-of-page Rent Rate input) 
 ### Phase 4: Audit, Polish & Deployment
 - [x] `✅ Done` Harden PWA offline routing (`navigateFallbackDenylist`), `.webmanifest`/`sw.js` headers, and UI click/blur edge cases.
 - [x] `✅ Done` Add `Dockerfile`, `.dockerignore`, `render.yaml`, and `README.md` with configurable DB path.
-- [ ] `🔄 Ongoing` Push project to GitHub repository and share HTTPS PWA deployment instructions.
+- [x] `✅ Done` Push project to GitHub repository (`https://github.com/debanjan-steel/Rent-Tracker`).
+- [ ] `🔄 Ongoing` Deploy over HTTPS and install PWA on phone/desktop.
 - [ ] `🗓️ Future` Verify live HTTPS install prompt & Lighthouse PWA score post-deploy.
 
 ---
@@ -187,7 +188,8 @@ When the user updates **Rent** (in Settings or the top-of-page Rent Rate input) 
 | `2026-11-26` | Clarified two-value monthly model (Rent + Electric Bill), Settings/top-of-page Rent input auto-filling months as `Due / Pending`, manual tap-to-toggle to `Paid / Success`, and exact update rule: changing Rent updates all `Due / Pending` months while keeping `Paid / Success` months untouched. | `✅ Done` |
 | `2026-11-26` | Finalized Phase 0 decisions: Single-tenant MVP (multi-tenant-ready schema), Option A (FastAPI + React/Vite TypeScript PWA), `INR ₹`, and blank-until-entered Electric Bill flow (`blank` -> manual entry -> `Due / Pending` -> click -> `Paid / Success`). Transitioned Phase 1 to `🔄 Ongoing`. | `✅ Done` |
 | `2026-11-26` | Completed Phases 1–3 implementation: built FastAPI + SQLite backend, pytest integration tests, React + TypeScript + Vite PWA (`vite-plugin-pwa`, IndexedDB offline queue, PNG icons), Columns & Month Tabs UI, Security Deposit hold/return flow, Top-bar/Settings Rent Rate control, and CSV/JSON exports. | `✅ Done` |
-| `2026-11-26` | Hardened PWA Workbox routing & MIME headers, added deposit deduction preview, added `Dockerfile`, `.dockerignore`, `render.yaml`, and `README.md`, and prepared repository for GitHub push & HTTPS PWA deployment. | `🔄 Ongoing` |
+| `2026-11-26` | Hardened PWA Workbox routing & MIME headers, added deposit deduction preview, added `Dockerfile`, `.dockerignore`, `render.yaml`, and `README.md`, and prepared repository for GitHub push & HTTPS PWA deployment. | `✅ Done` |
+| `2026-11-26` | Pushed entire project to `https://github.com/debanjan-steel/Rent-Tracker` (`main`). Ready for HTTPS PWA deployment. | `🔄 Ongoing` |
 
 ---
 
