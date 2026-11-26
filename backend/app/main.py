@@ -3,8 +3,9 @@
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -35,6 +36,7 @@ from .services import (
     ensure_initial_state,
     get_lease_or_404,
     get_month_or_404,
+    import_backup_payload,
     reopen_security_deposit,
     settle_security_deposit,
     toggle_payment_status,
@@ -281,6 +283,15 @@ def export_json(
 ) -> DashboardResponse:
     """Download complete dashboard state as JSON backup."""
     return build_dashboard(session, lease_id=lease_id)
+
+
+@app.post("/api/v1/import/json", response_model=DashboardResponse)
+def import_json(
+    payload: dict[str, Any] = Body(...),
+    session: Session = Depends(get_session),
+) -> DashboardResponse:
+    """Restore and migrate any supported backup JSON format without deleting data."""
+    return import_backup_payload(session, payload)
 
 
 # Serve production PWA bundle when built

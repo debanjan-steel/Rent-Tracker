@@ -13,6 +13,16 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+class SchemaMeta(Base):
+    """Tracks applied database schema version for safe forward migrations."""
+
+    __tablename__ = "schema_meta"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
 class AppSettings(Base):
     """Global app preferences including current base monthly rent."""
 
@@ -42,6 +52,7 @@ class LeasePeriod(Base):
     deposit_returned_paise: Mapped[int | None] = mapped_column(Integer, nullable=True)
     deposit_returned_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
     deposit_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    extra_data: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
@@ -87,6 +98,7 @@ class MonthlyEntry(Base):
     electric_paid_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    extra_data: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     client_mutation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

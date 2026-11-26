@@ -5,6 +5,21 @@ const DB_VERSION = 1;
 const STORE_STATE = "stateCache";
 const STORE_QUEUE = "mutationQueue";
 const DASHBOARD_KEY = "dashboard";
+const DURABLE_BACKUP_KEY = "durableUserBackup";
+
+export function hasRealUserData(dash: DashboardResponse): boolean {
+  if (dash.settings.default_rent_paise > 0) return true;
+  if (dash.active_lease.security_deposit_paise > 0) return true;
+  if (dash.active_lease.tenant_name !== "Primary Tenant") return true;
+  if (dash.active_lease.unit_label !== "Rental Unit") return true;
+  if (dash.leases.length > 1) return true;
+  return dash.months.some(
+    (m) =>
+      m.rent_status === "paid_success" ||
+      m.electric_amount_paise !== null ||
+      m.notes.trim() !== "",
+  );
+}
 
 export type QueuedMutation =
   | {
@@ -125,7 +140,11 @@ export async function cacheDashboard(dashboard: DashboardResponse): Promise<void
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_STATE, "readwrite");
-      tx.objectStore(STORE_STATE).put(dashboard, DASHBOARD_KEY);
+      const store = tx.objectStore(STORE_STATE);
+      store.put(dashboard, DASHBOARD_KEY);
+      if (hasRealUserData(dashboard)) {
+        store.put(dashboard, DURABLE_BACKUP_KEY);
+      }
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
@@ -148,6 +167,37 @@ export async function loadCachedDashboard(): Promise<DashboardResponse | null> {
     return result;
   } catch {
     return null;
+  }
+}
+
+export async function loadDurableUserBackup(): Promise<DashboardResponse | null> {
+  try {
+    const db = await openDb();
+    const result = await new Promise<DashboardResponse | null>((resolve, reject) => {
+      const tx = db.transaction(STORE_STATE, "readonly");
+      const req = tx.objectStore(STORE_STATE).get(DURABLE_BACKUP_KEY);
+      req.onsuccess = () => resolve((req.result as DashboardResponse | undefined) ?? null);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearDurableUserBackup(): Promise<void> {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_STATE, "readwrite");
+      tx.objectStore(STORE_STATE).delete(DURABLE_BACKUP_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch {
+    // Best-effort clear
   }
 }
 

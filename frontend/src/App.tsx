@@ -16,6 +16,7 @@ import {
   fetchDashboard,
   flushOfflineQueue,
   reopenSecurityDeposit,
+  restoreBackupJson,
   returnSecurityDeposit,
   saveElectricBill,
   saveMonthNotes,
@@ -25,7 +26,7 @@ import {
   updateLeaseDetails,
   updateRentRate,
 } from "./lib/api";
-import { listQueuedMutations } from "./lib/offlineStore";
+import { clearDurableUserBackup, listQueuedMutations } from "./lib/offlineStore";
 import { formatINR } from "./utils/format";
 import { RentRateBanner } from "./components/RentRateBanner";
 import { MonthlyLedgerView } from "./components/MonthlyLedgerView";
@@ -48,6 +49,7 @@ export function App() {
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [fromCache, setFromCache] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [recoverableBackup, setRecoverableBackup] = useState<DashboardResponse | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   const load = useCallback(async () => {
@@ -57,6 +59,7 @@ export function App() {
       setDashboard(res.dashboard);
       setFromCache(res.fromCache);
       setPendingSyncCount(res.pendingCount);
+      setRecoverableBackup(res.recoverableBackup);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load rent tracker data.");
     } finally {
@@ -228,6 +231,54 @@ export function App() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-5xl space-y-5 px-4 pt-5">
+        {recoverableBackup && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-bold">Saved data found in this browser</p>
+              <p className="text-xs text-amber-900">
+                The server returned an empty ledger (such as after a fresh container deploy), so your saved browser snapshot is shown safely below.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      setBusy(true);
+                      const restored = await restoreBackupJson(recoverableBackup);
+                      setDashboard(restored);
+                      setRecoverableBackup(null);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Failed to restore backup.");
+                    } finally {
+                      setBusy(false);
+                    }
+                  })();
+                }}
+                className="inline-flex min-h-9 cursor-pointer items-center rounded-xl bg-amber-700 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-60"
+              >
+                Restore to Server
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  void (async () => {
+                    await clearDurableUserBackup();
+                    setRecoverableBackup(null);
+                    await load();
+                  })();
+                }}
+                className="inline-flex min-h-9 cursor-pointer items-center rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+              >
+                Start Fresh
+              </button>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700">
             {error}
@@ -364,6 +415,11 @@ export function App() {
             }}
             onUpdateLease={async (tenantName, unitLabel, startMonth) => {
               await runAction(() => updateLeaseDetails(dashboard, tenantName, unitLabel, startMonth));
+            }}
+            onImportBackup={async (payload) => {
+              const restored = await restoreBackupJson(payload);
+              setDashboard(restored);
+              setRecoverableBackup(null);
             }}
           />
         )}

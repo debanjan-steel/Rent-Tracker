@@ -241,3 +241,144 @@ def test_pwa_static_and_api_404_guard(client: TestClient):
     api_missing = client.get("/api/v1/does-not-exist")
     assert api_missing.status_code == 404
 
+
+def test_import_migrates_changed_legacy_formats_without_data_loss(client: TestClient):
+    """Legacy/changed formats (rupee strings, month names, DD/MM/YYYY dates, synonyms, extra fields) convert safely."""
+    legacy_payload = {
+        "settings": {"currency": "INR", "monthly_rent": "₹14,500"},
+        "lease": {
+            "tenant_name": "Arjun",
+            "unit_label": "Flat 3A",
+            "start_month": "Jan 2026",
+            "security_deposit": "50000",
+            "deposit_given_date": "01/01/2026",
+            "custom_legacy_tag": "vip-tenant",
+        },
+        "months": [
+            {
+                "month": "Jan 2026",
+                "rent": "14,500",
+                "rent_paid": "paid",
+                "rent_paid_date": "05/01/2026",
+                "electric_bill": "1,234.50",
+                "electric_paid": "success",
+                "electric_paid_date": "10-01-2026",
+                "meter_units": 182,
+            },
+            {
+                "month": "2026/02",
+                "rent": 14500,
+                "rent_status": "pending",
+                "electric": None,
+            },
+        ],
+    }
+
+    resp = client.post("/api/v1/import/json", json=legacy_payload)
+    assert resp.status_code == 200
+    data = resp.json()
+
+    assert data["schema_version"] == 2
+    assert data["settings"]["default_rent_paise"] == 1_450_000
+    assert data["active_lease"]["tenant_name"] == "Arjun"
+    assert data["active_lease"]["security_deposit_paise"] == 5_000_000
+    assert data["active_lease"]["deposit_given_date"] == "2026-01-01"
+    assert data["active_lease"]["deposit_status"] == "held"
+
+    jan, feb = data["months"]
+    assert jan["month_key"] == "2026-01"
+    assert jan["rent_amount_paise"] == 1_450_000
+    assert jan["rent_status"] == "paid_success"
+    assert jan["rent_paid_date"] == "2026-01-05"
+    assert jan["electric_amount_paise"] == 123_450
+    assert jan["electric_status"] == "paid_success"
+    assert jan["electric_paid_date"] == "2026-01-10"
+
+    assert feb["month_key"] == "2026-02"
+    assert feb["rent_status"] == "due_pending"
+    assert feb["electric_amount_paise"] is None
+    assert feb["electric_status"] == "blank"
+
+
+def test_sqlite_v1_schema_migrates_non_destructively_with_backup(tmp_path):
+    """Older SQLite schema without extra_data/schema_meta upgrades cleanly and preserves rows."""
+    import sqlite3
+    from app import models
+
+    db_file = tmp_path / "legacy_v1.db"
+    conn = sqlite3.connect(db_file)
+    conn.executescript(
+        """
+        CREATE TABLE app_settings (
+            id INTEGER PRIMARY KEY,
+            currency VARCHAR(8) NOT NULL,
+            default_rent_paise INTEGER NOT NULL,
+            updated_at DATETIME NOT NULL
+        );
+        CREATE TABLE lease_periods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_name VARCHAR(120) NOT NULL,
+            unit_label VARCHAR(120) NOT NULL,
+            start_month VARCHAR(7) NOT NULL,
+            end_month VARCHAR(7),
+            status VARCHAR(20) NOT NULL,
+            security_deposit_paise INTEGER NOT NULL,
+            deposit_given_date VARCHAR(10),
+            deposit_status VARCHAR(24) NOT NULL,
+            deposit_returned_paise INTEGER,
+            deposit_returned_date VARCHAR(10),
+            deposit_notes TEXT NOT NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL
+        );
+        CREATE TABLE rent_rate_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lease_id INTEGER NOT NULL,
+            rent_amount_paise INTEGER NOT NULL,
+            note VARCHAR(255) NOT NULL,
+            created_at DATETIME NOT NULL
+        );
+        CREATE TABLE monthly_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lease_id INTEGER NOT NULL,
+            month_key VARCHAR(7) NOT NULL,
+            rent_amount_paise INTEGER NOT NULL,
+            rent_status VARCHAR(20) NOT NULL,
+            rent_paid_date VARCHAR(10),
+            electric_amount_paise INTEGER,
+            electric_status VARCHAR(20) NOT NULL,
+            electric_paid_date VARCHAR(10),
+            notes TEXT NOT NULL,
+            client_mutation_id VARCHAR(64),
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL
+        );
+        INSERT INTO app_settings VALUES (1, 'INR', 1100000, '2026-01-01T00:00:00Z');
+        INSERT INTO lease_periods VALUES (1, 'Legacy Tenant', 'Unit 1', '2026-01', NULL, 'active', 3000000, '01/01/2026', 'held', NULL, NULL, 'Old note', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+        INSERT INTO monthly_entries VALUES (1, 1, '2026-01', 1100000, 'paid', '05/01/2026', 85000, 'pending', NULL, 'Jan meter', NULL, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    migrated_engine = db.create_db_engine(f"sqlite:///{db_file.as_posix()}")
+    try:
+        db.init_db(migrated_engine)
+        backups = list(tmp_path.glob("legacy_v1.db.bak.v1.*"))
+        assert len(backups) == 1
+
+        with sessionmaker(bind=migrated_engine)() as session:
+            meta = session.get(models.SchemaMeta, 1)
+            assert meta is not None and meta.schema_version == 2
+            lease = session.get(models.LeasePeriod, 1)
+            assert lease is not None
+            assert lease.tenant_name == "Legacy Tenant"
+            assert lease.deposit_given_date == "2026-01-01"
+            entry = session.get(models.MonthlyEntry, 1)
+            assert entry is not None
+            assert entry.rent_status == "paid_success"
+            assert entry.rent_paid_date == "2026-01-05"
+            assert entry.electric_status == "due_pending"
+    finally:
+        migrated_engine.dispose()
+

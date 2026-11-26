@@ -63,6 +63,7 @@ export interface DashboardSummary {
 }
 
 export interface DashboardResponse {
+  schema_version?: number;
   settings: AppSettings;
   active_lease: LeasePeriod;
   leases: LeasePeriod[];

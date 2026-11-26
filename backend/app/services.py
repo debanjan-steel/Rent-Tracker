@@ -3,13 +3,14 @@
 import csv
 import io
 from datetime import date
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from .models import AppSettings, LeasePeriod, MonthlyEntry, RentRateHistory, utc_now
+from .migrations import CURRENT_SCHEMA_VERSION, migrate_backup_payload
+from .models import AppSettings, LeasePeriod, MonthlyEntry, RentRateHistory, SchemaMeta, utc_now
 from .schemas import (
     DashboardResponse,
     DashboardSummary,
@@ -221,6 +222,7 @@ def build_dashboard(session: Session, lease_id: int | None = None) -> DashboardR
     )
     summary = compute_summary(active_lease, months)
     return DashboardResponse(
+        schema_version=CURRENT_SCHEMA_VERSION,
         settings=settings,
         active_lease=active_lease,
         leases=leases,
@@ -557,3 +559,92 @@ def build_csv_export(session: Session, lease_id: int | None = None) -> str:
         )
 
     return buf.getvalue()
+
+
+def import_backup_payload(session: Session, raw_payload: dict[str, Any]) -> DashboardResponse:
+    """Validate, migrate from any supported format, and restore saved user data safely."""
+    migrated = migrate_backup_payload(raw_payload)
+    now = utc_now()
+
+    settings = get_or_create_settings(session)
+    settings.currency = migrated["settings"]["currency"]
+    settings.default_rent_paise = migrated["settings"]["default_rent_paise"]
+    settings.updated_at = now
+
+    # Clear existing lease children & leases inside this transaction after payload validated
+    session.execute(delete(MonthlyEntry))
+    session.execute(delete(RentRateHistory))
+    session.execute(delete(LeasePeriod))
+    session.flush()
+
+    lease_id_map: dict[Any, int] = {}
+    created_leases: list[LeasePeriod] = []
+    for lease_data in migrated["leases"]:
+        lease = LeasePeriod(
+            tenant_name=lease_data["tenant_name"],
+            unit_label=lease_data["unit_label"],
+            start_month=lease_data["start_month"],
+            end_month=lease_data["end_month"],
+            status=lease_data["status"],
+            security_deposit_paise=lease_data["security_deposit_paise"],
+            deposit_given_date=lease_data["deposit_given_date"],
+            deposit_status=lease_data["deposit_status"],
+            deposit_returned_paise=lease_data["deposit_returned_paise"],
+            deposit_returned_date=lease_data["deposit_returned_date"],
+            deposit_notes=lease_data["deposit_notes"],
+            extra_data=lease_data["extra_data"],
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(lease)
+        session.flush()
+        created_leases.append(lease)
+        if lease_data["legacy_id"] is not None:
+            lease_id_map[lease_data["legacy_id"]] = lease.id
+
+    fallback_lease_id = created_leases[0].id
+    seen_lease_months: set[tuple[int, str]] = set()
+    for month_data in migrated["months"]:
+        target_lease_id = lease_id_map.get(month_data["legacy_lease_id"], fallback_lease_id)
+        key = (target_lease_id, month_data["month_key"])
+        if key in seen_lease_months:
+            continue
+        seen_lease_months.add(key)
+        session.add(
+            MonthlyEntry(
+                lease_id=target_lease_id,
+                month_key=month_data["month_key"],
+                rent_amount_paise=month_data["rent_amount_paise"],
+                rent_status=month_data["rent_status"],
+                rent_paid_date=month_data["rent_paid_date"],
+                electric_amount_paise=month_data["electric_amount_paise"],
+                electric_status=month_data["electric_status"],
+                electric_paid_date=month_data["electric_paid_date"],
+                notes=month_data["notes"],
+                extra_data=month_data["extra_data"],
+                client_mutation_id=month_data["client_mutation_id"],
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    for hist in migrated["rate_history"]:
+        target_lease_id = lease_id_map.get(hist["legacy_lease_id"], fallback_lease_id)
+        session.add(
+            RentRateHistory(
+                lease_id=target_lease_id,
+                rent_amount_paise=hist["rent_amount_paise"],
+                note=hist["note"],
+                created_at=now,
+            )
+        )
+
+    meta = session.get(SchemaMeta, 1)
+    if meta is None:
+        session.add(SchemaMeta(id=1, schema_version=CURRENT_SCHEMA_VERSION, updated_at=now))
+    else:
+        meta.schema_version = CURRENT_SCHEMA_VERSION
+        meta.updated_at = now
+
+    session.commit()
+    return build_dashboard(session, lease_id=fallback_lease_id)

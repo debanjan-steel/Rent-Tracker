@@ -1,5 +1,7 @@
 # Rent & Electric Bill Tracker (PWA)
 
+> **Live App:** https://rent-tracker-qxt9.onrender.com/ *(or double-click `Open Rent Tracker.url` in this folder)*
+
 A manual-first **Rent, Electric Bill, and Security Deposit Tracker** built as an installable **Progressive Web App (PWA)** in **Indian Rupees (`INR ₹`)**.
 
 ## Features

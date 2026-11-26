@@ -3,8 +3,10 @@ import { makeMutationId, nextMonthKey, todayIso } from "../utils/format";
 import {
   cacheDashboard,
   enqueueMutation,
+  hasRealUserData,
   listQueuedMutations,
   loadCachedDashboard,
+  loadDurableUserBackup,
   removeMutation,
   type QueuedMutation,
 } from "./offlineStore";
@@ -243,21 +245,46 @@ export async function fetchDashboard(leaseId?: number): Promise<{
   dashboard: DashboardResponse;
   fromCache: boolean;
   pendingCount: number;
+  recoverableBackup: DashboardResponse | null;
 }> {
   try {
     const { remaining } = await flushOfflineQueue();
     const query = leaseId ? `?lease_id=${leaseId}` : "";
     const dashboard = await requestJson<DashboardResponse>(`/dashboard${query}`);
+    if (!hasRealUserData(dashboard)) {
+      const durable = await loadDurableUserBackup();
+      if (durable && hasRealUserData(durable)) {
+        return {
+          dashboard: durable,
+          fromCache: false,
+          pendingCount: remaining,
+          recoverableBackup: durable,
+        };
+      }
+    }
     await cacheDashboard(dashboard);
-    return { dashboard, fromCache: false, pendingCount: remaining };
+    return { dashboard, fromCache: false, pendingCount: remaining, recoverableBackup: null };
   } catch (err) {
     const cached = await loadCachedDashboard();
+    const durable = await loadDurableUserBackup();
     const pendingCount = (await listQueuedMutations()).length;
     if (cached) {
-      return { dashboard: cached, fromCache: true, pendingCount };
+      return { dashboard: cached, fromCache: true, pendingCount, recoverableBackup: null };
+    }
+    if (durable) {
+      return { dashboard: durable, fromCache: true, pendingCount, recoverableBackup: null };
     }
     throw err;
   }
+}
+
+export async function restoreBackupJson(payload: unknown): Promise<DashboardResponse> {
+  const restored = await requestJson<DashboardResponse>("/import/json", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  await cacheDashboard(restored);
+  return restored;
 }
 
 export async function executeWithOfflineFallback(

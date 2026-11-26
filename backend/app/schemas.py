@@ -147,6 +147,7 @@ class DashboardSummary(BaseModel):
 
 
 class DashboardResponse(BaseModel):
+    schema_version: int = 2
     settings: AppSettingsRead
     active_lease: LeasePeriodRead
     leases: list[LeasePeriodRead]

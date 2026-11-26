@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Download, History, Smartphone, Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Download, History, Smartphone, Check, Upload, DatabaseZap } from "lucide-react";
 import type { DashboardResponse } from "../types";
 import { formatINR, paiseToInput, rupeesInputToPaise } from "../utils/format";
 
@@ -10,6 +10,7 @@ interface SettingsPanelProps {
   onInstallPwa: () => Promise<void>;
   onSaveRent: (rentPaise: number, note?: string) => Promise<void>;
   onUpdateLease: (tenantName: string, unitLabel: string, startMonth: string) => Promise<void>;
+  onImportBackup: (payload: unknown) => Promise<void>;
 }
 
 export function SettingsPanel({
@@ -19,7 +20,9 @@ export function SettingsPanel({
   onInstallPwa,
   onSaveRent,
   onUpdateLease,
+  onImportBackup,
 }: SettingsPanelProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { settings, active_lease, rate_history, summary } = dashboard;
   const [rentDraft, setRentDraft] = useState(() => paiseToInput(settings.default_rent_paise));
   const [rentNote, setRentNote] = useState("");
@@ -64,6 +67,26 @@ export function SettingsPanel({
     a.download = `rent-tracker-backup-${active_lease.start_month}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed: unknown = JSON.parse(text);
+      await onImportBackup(parsed);
+      setSavedNotice("Backup imported and migrated to current format.");
+      setTimeout(() => setSavedNotice(null), 4000);
+    } catch (err) {
+      setSavedNotice(
+        err instanceof Error ? `Import failed: ${err.message}` : "Import failed: invalid JSON file.",
+      );
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   };
 
   return (
@@ -225,10 +248,10 @@ export function SettingsPanel({
         <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
             <Download className="h-4 w-4 text-teal-700" />
-            <span>Export &amp; Backup</span>
+            <span>Export, Backup &amp; Format-Safe Restore</span>
           </div>
           <p className="text-xs text-slate-500">
-            Download your complete rent, electric bill, and security deposit records.
+            Download records anytime. Restoring a JSON backup automatically upgrades older or changed input formats without deleting entries.
           </p>
           <div className="flex flex-wrap gap-2">
             <a
@@ -247,6 +270,30 @@ export function SettingsPanel({
               <Download className="h-4 w-4" />
               <span>JSON Backup</span>
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={(e) => {
+                void handleFileImport(e);
+              }}
+              className="hidden"
+            />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-xl border border-teal-200 bg-teal-50 px-3.5 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60"
+            >
+              <Upload className="h-4 w-4" />
+              <span>Restore JSON</span>
+            </button>
+          </div>
+          <div className="flex items-start gap-2 rounded-xl bg-slate-50 p-2.5 text-[11px] text-slate-500">
+            <DatabaseZap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-700" />
+            <span>
+              Schema v{dashboard.schema_version ?? 2}: your browser keeps a durable backup snapshot automatically, and setting <code>RENT_TRACKER_DB_URL</code> to a PostgreSQL URL preserves data across cloud container rebuilds.
+            </span>
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@
 > **Last Updated:** `2026-11-26`  
 > **Workspace Runtime:** Python 3.13.14 (`.venv` auto-activated via `.vscode/settings.json` & `.python-version`)  
 > **Target Platform:** Installable Progressive Web App (Desktop, Android, iOS Home Screen)  
+> **Live Deployed App:** https://rent-tracker-qxt9.onrender.com/ *(1-tap shortcut: `Open Rent Tracker.url`)*  
 > **Entry Mode:** **100% Manual Entry** (no background billing automation or external bank/meter scraping)
 
 ---
@@ -191,6 +192,7 @@ When the user updates **Rent** (in Settings or the top-of-page Rent Rate input) 
 | `2026-11-26` | Hardened PWA Workbox routing & MIME headers, added deposit deduction preview, added `Dockerfile`, `.dockerignore`, `render.yaml`, and `README.md`, and prepared repository for GitHub push & HTTPS PWA deployment. | `✅ Done` |
 | `2026-11-26` | Pushed entire project to `https://github.com/debanjan-steel/Rent-Tracker` (`main`). Ready for HTTPS PWA deployment. | `✅ Done` |
 | `2026-11-26` | Updated initial month seeding to start from `Jan 2026` (`2026-01` through current month), defaulted Month Tabs view to `Jan 2026`, and added automatic month backfilling when setting an earlier Lease Start Month in Settings. | `✅ Done` |
+| `2026-11-26` | Added non-destructive schema & input-format migration engine (`SchemaMeta`, `extra_data`, `migrations.py`, `POST /api/v1/import/json`), PostgreSQL (`psycopg`) support for permanent cloud persistence, browser IndexedDB durable recovery guard, Settings JSON restore button, and 1-tap `Open Rent Tracker.url` shortcut for `https://rent-tracker-qxt9.onrender.com/`. | `✅ Done` |
 
 ---
 
